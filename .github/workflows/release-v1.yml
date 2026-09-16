@@ -3,172 +3,162 @@ name: build-and-publish-v1
 on:
   pull_request:
     branches: [main]
-    paths:
-      - '.github/workflows/release-v1.yml'
-      - 'desktop/**'
+    paths: ['.github/workflows/release-v1.yml', 'desktop/**', 'release-tools.cjs', 'SOURCE-v1.0.2.json', 'RELEASE-v1.0.2.md']
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/release-v1.yml'
+    paths: ['.github/workflows/release-v1.yml']
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: desktop-v1.0.2-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  APP_VERSION: '1.0.1'
+  APP_VERSION: '1.0.2'
+  EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
-  windows:
-    name: Windows ${{ matrix.channel }}
-    runs-on: windows-2025
+  build:
+    name: ${{ matrix.platform }} ${{ matrix.channel }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        channel: [modern, legacy]
+        include:
+          - {platform: windows, channel: modern, os: windows-2025, script: 'dist:win'}
+          - {platform: windows, channel: legacy, os: windows-2025, script: 'dist:win:legacy'}
+          - {platform: macos, channel: modern, os: macos-15, script: 'dist:mac'}
+          - {platform: macos, channel: mojave, os: macos-15, script: 'dist:mac:mojave'}
     defaults:
       run:
-        working-directory: desktop
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Keep exact source bytes on every OS
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22
+      - name: Verify exact head and validated product source
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          node --check release-tools.cjs
+          node release-tools.cjs source
       - name: Install packaging dependencies
-        shell: pwsh
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-        run: npm install --no-audit --no-fund
-      - name: Set app version
-        shell: pwsh
-        run: npm version "$env:APP_VERSION" --no-git-tag-version --allow-same-version
-      - name: Build Windows package
-        shell: pwsh
-        run: |
-          if ("${{ matrix.channel }}" -eq "legacy") { npm run dist:win:legacy }
-          else { npm run dist:win }
-      - name: Normalize public filename
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path release | Out-Null
-          $src = Get-ChildItem -Path dist -Filter *.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-          if (-not $src) { throw "No Windows installer was produced" }
-          if ("${{ matrix.channel }}" -eq "legacy") {
-            $name = "Incheon-Academy-OS-Windows-Legacy-7-8-8.1-v$env:APP_VERSION-x64.exe"
-          } else {
-            $name = "Incheon-Academy-OS-Windows-10-11-v$env:APP_VERSION-x64.exe"
-          }
-          Copy-Item $src.FullName (Join-Path release $name)
-          Get-ChildItem release
-      - uses: actions/upload-artifact@v4
-        with:
-          name: public-windows-${{ matrix.channel }}
-          path: desktop/release/*.exe
-          if-no-files-found: error
-          compression-level: 0
-
-  macos:
-    name: macOS ${{ matrix.channel }}
-    runs-on: macos-15
-    strategy:
-      fail-fast: false
-      matrix:
-        channel: [modern, mojave]
-    defaults:
-      run:
         working-directory: desktop
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install packaging dependencies
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm install --no-audit --no-fund
-      - name: Set app version
-        run: npm version "$APP_VERSION" --no-git-tag-version --allow-same-version
-      - name: Build macOS package
+      - name: Build actual native package
+        working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: |
-          if [ "${{ matrix.channel }}" = "mojave" ]; then npm run dist:mac:mojave; else npm run dist:mac; fi
-      - name: Normalize public filename
-        run: |
-          mkdir -p release
-          src="$(find dist -maxdepth 1 -type f -name '*.dmg' | head -n 1)"
-          test -n "$src"
-          if [ "${{ matrix.channel }}" = "mojave" ]; then
-            name="Incheon-Academy-OS-macOS-Mojave-10.14.6-v${APP_VERSION}-x64.dmg"
-          else
-            name="Incheon-Academy-OS-macOS-13-plus-v${APP_VERSION}-universal.dmg"
-          fi
-          cp "$src" "release/$name"
-          ls -lh release
+        run: npm run '${{ matrix.script }}'
+      - name: Verify actual OS metadata
+        working-directory: desktop
+        run: node verify-package.cjs '${{ matrix.platform }}' '${{ matrix.channel }}'
+      - name: Normalize filename without changing installer bytes
+        run: node release-tools.cjs normalize '${{ matrix.platform }}' '${{ matrix.channel }}'
       - uses: actions/upload-artifact@v4
         with:
-          name: public-macos-${{ matrix.channel }}
-          path: desktop/release/*.dmg
+          name: public-${{ matrix.platform }}-${{ matrix.channel }}-1.0.2
+          path: desktop/release/*
           if-no-files-found: error
           compression-level: 0
 
-  release:
-    name: Publish GitHub Release
+  web:
+    name: Read-only production brand smoke
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    needs: [windows, macos]
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+      - name: Probe anonymous production surfaces only
+        run: |
+          for attempt in $(seq 1 12); do
+            if node release-tools.cjs web; then exit 0; fi
+            sleep 10
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: production-brand-smoke-1.0.2
+          path: web-evidence/public-brand-smoke.json
+          if-no-files-found: error
+
+  release:
+    name: Publish verified v1.0.2 without replacing old assets
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
       - uses: actions/download-artifact@v4
         with:
-          pattern: public-*
+          pattern: public-*-*-1.0.2
           merge-multiple: true
           path: release
-      - name: Verify release payload
+      - name: Verify all four same-head packages and hashes
         run: |
-          set -euo pipefail
-          ls -lh release
-          count="$(find release -maxdepth 1 -type f \( -name '*.exe' -o -name '*.dmg' \) | wc -l | tr -d ' ')"
-          test "$count" = "4"
-          cd release
-          sha256sum *.exe *.dmg | sort -k2 > SHA256SUMS.txt
-          cat SHA256SUMS.txt
-      - name: Write release notes
-        run: |
-          cat > RELEASE_NOTES.md <<'EOF'
-          # 실용음악분과 OS v1.0.1
-
-          공식 다운로드센터에서 제공하는 데스크톱 설치형 앱 v1.0.1입니다.
-
-          ## 이번 변경
-          - 설치 앱 표시명을 `실용음악분과 OS`로 변경
-          - 내부 App ID `kr.or.incheonacademy.unionos`는 그대로 유지
-          - Production 웹 OS와 동일한 계정·권한·데이터를 계속 사용
-
-          ## 포함 파일
-          - Windows 10/11 x64
-          - Windows 7/8/8.1 Legacy x64
-          - macOS 13+ Universal
-          - macOS Mojave 10.14.6 Intel x64
-          - SHA256SUMS.txt
-
-          ## 보안 및 호환성 안내
-          이 v1.0.1 데스크톱 설치파일은 코드서명 및 Apple notarization 전 배포본이므로 Windows SmartScreen 또는 macOS Gatekeeper 경고가 표시될 수 있습니다. Legacy 채널은 실행 호환성을 위한 채널이며 최신 운영체제와 동일한 보안 수준을 의미하지 않습니다.
-
-          제품 기능과 회원 데이터는 Production HTTPS 서버에서 제공되며 앱 파일에 서버 비밀키나 회원 데이터가 포함되지 않습니다.
-
-          Validated product source: `12091139ce07640650795160476f0435bf22a84f`
-          EOF
-      - name: Publish v1.0.1 release
-        env:
-          GH_TOKEN: ${{ github.token }}
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          node release-tools.cjs payload
+          (cd release && sha256sum -c SHA256SUMS.txt)
+      - name: Stage a new release only
         run: |
           set -euo pipefail
           tag="v${APP_VERSION}"
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" release/* --clobber
-            gh release edit "$tag" --title "실용음악분과 OS v${APP_VERSION}" --notes-file RELEASE_NOTES.md
-          else
-            gh release create "$tag" release/* --target "$GITHUB_SHA" --title "실용음악분과 OS v${APP_VERSION}" --notes-file RELEASE_NOTES.md
+            echo 'Existing release must never be overwritten; inspect it before retrying.'
+            exit 1
           fi
+          cp RELEASE-v1.0.2.md RELEASE_NOTES.md
+          printf '\nPublic packaging commit: `%s`\n' "$GITHUB_SHA" >> RELEASE_NOTES.md
+          gh release create "$tag" release/* --draft --target "$GITHUB_SHA" --title "실용음악위원회 v${APP_VERSION}" --notes-file RELEASE_NOTES.md
+      - name: Read back every staged asset before publication
+        run: |
+          set -euo pipefail
+          gh release download "v${APP_VERSION}" --dir staged-readback
+          test "$(find staged-readback -maxdepth 1 -type f | wc -l)" = "10"
+          for file in release/*; do cmp "$file" "staged-readback/$(basename "$file")"; done
+          (cd staged-readback && sha256sum -c SHA256SUMS.txt)
+      - name: Publish the verified new release
+        run: gh release edit "v${APP_VERSION}" --draft=false --latest
+      - name: Anonymous public download readback
+        env:
+          GH_TOKEN: ''
+        run: |
+          set -euo pipefail
+          mkdir public-readback
+          base="https://github.com/${GH_REPO}/releases/download/v${APP_VERSION}"
+          for file in release/*; do
+            name="$(basename "$file")"
+            curl --fail --location --retry 5 --retry-all-errors --max-time 180 "$base/$name" -o "public-readback/$name"
+            cmp "$file" "public-readback/$name"
+          done
+          (cd public-readback && sha256sum -c SHA256SUMS.txt)
