@@ -1,8 +1,8 @@
 {
-  "name": "incheon-academy-union-os-desktop-release",
-  "version": "1.0.1",
+  "name": "incheon-academy-union-os-desktop",
+  "version": "1.0.2",
   "private": true,
-  "description": "실용음악분과 운영 OS 공개 배포용 데스크톱 셸",
+  "description": "인천학원연합회 음악분과 실용음악위원회 데스크톱 앱",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "kr.or.incheonacademy.unionos",
-    "productName": "실용음악분과 OS",
+    "productName": "실용음악위원회",
     "asar": true,
     "directories": {
       "output": "dist",
@@ -43,7 +43,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "실용음악분과 OS",
+      "shortcutName": "실용음악위원회",
       "artifactName": "Incheon-Academy-OS-Setup-${version}-${arch}.${ext}"
     },
     "publish": null

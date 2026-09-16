@@ -1,0 +1,12 @@
+{
+  "productSourceSha": "66ea1100f1f39d1dfebbe10798213062a953d77e",
+  "version": "1.0.2",
+  "appName": "실용음악위원회",
+  "blobs": {
+    "desktop/main.cjs": "2be06e6228bf7d31c7607bee17698a31dbcd75ee",
+    "desktop/package.json": "28837cae40c21b3adff3f1d8646048e053084483",
+    "desktop/verify-package.cjs": "4e00d9cb4ebf574a639c0e85942b04d5bfb06398",
+    "desktop/build/icon.svg": "eb65dbb4dffe031ace689e86c905cc12274fd30f"
+  },
+  "scope": "Public desktop shell only. No server source, secrets or member data."
+}

@@ -1,6 +1,8 @@
 const {app,BrowserWindow,Menu,dialog,session,shell}=require('electron');
 const https=require('node:https');
 const http=require('node:http');
+const path=require('node:path');
+const {existsSync,mkdirSync}=require('node:fs');
 
 const DEFAULT_URL='https://incheon-academy-union-os-web.vercel.app';
 const APP_URL=(process.env.INCHEON_OS_URL||DEFAULT_URL).replace(/\/$/,'');
@@ -8,7 +10,21 @@ const APP_ORIGIN=new URL(APP_URL).origin;
 const UPDATE_MANIFEST=`${APP_ORIGIN}/app-release.json`;
 const DOWNLOAD_PAGE=`${APP_ORIGIN}/download`;
 const PRODUCT_ID='kr.or.incheonacademy.unionos';
-const DISPLAY_NAME='실용음악분과 OS';
+const DISPLAY_NAME='실용음악위원회';
+const LEGACY_USER_DATA_NAME='실용음악분과 OS';
+
+// Reuse an existing released-shell profile; a display-name change must not
+// create an empty cookie jar. Never copy, delete or migrate account data.
+const profileCandidates=[LEGACY_USER_DATA_NAME,require('./package.json').name]
+  .map(name=>path.join(app.getPath('appData'),name));
+const profilePath=profileCandidates.find(directory=>
+  existsSync(path.join(directory,'Cookies'))||existsSync(path.join(directory,'Network','Cookies'))
+)||profileCandidates.find(directory=>existsSync(directory))||profileCandidates[1];
+mkdirSync(profilePath,{recursive:true});
+app.setPath('userData',profilePath);
+app.setPath('sessionData',profilePath);
+// Keep Electron's existing internal package name and keychain identity. Only
+// the OS bundle/product/shortcut metadata and visible window title are renamed.
 
 app.setAppUserModelId(PRODUCT_ID);
 
