@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Hardened Runtime entitlements for the Developer ID build.
+
+    The shell only renders a remote web application: it runs no JIT of its own
+    beyond Chromium's, loads no third-party plug-ins, and has no preload bridge.
+    So the deliberately dangerous relaxations are NOT requested here:
+      com.apple.security.cs.allow-unsigned-executable-memory
+      com.apple.security.cs.disable-library-validation
+      com.apple.security.cs.allow-dyld-environment-variables
+      com.apple.security.get-task-allow
+    Adding any of them would weaken Hardened Runtime and must be justified
+    separately; tests assert their absence.
+  -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.network.client</key>
+  <true/>
+</dict>
+</plist>

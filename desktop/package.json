@@ -8,8 +8,12 @@
     "start": "electron .",
     "dist:win": "electron-builder --win nsis --x64 -c.electronVersion=44.2.0",
     "dist:win:legacy": "electron-builder --win portable --x64 -c.electronVersion=22.3.27",
-    "dist:mac": "electron-builder --mac dmg zip --universal -c.electronVersion=44.2.0 -c.mac.minimumSystemVersion=13.0",
-    "dist:mac:mojave": "electron-builder --mac dmg zip --x64 -c.electronVersion=26.6.10 -c.mac.minimumSystemVersion=10.14.6"
+    "dist:mac": "electron-builder --mac dmg zip --universal -c.electronVersion=44.5.0 -c.mac.minimumSystemVersion=13.0 -c.productName=IncheonAcademyOS -c.mac.executableName=IncheonAcademyOS -c.mac.extendInfo.CFBundleDisplayName=실용음악위원회",
+    "dist:mac:mojave": "electron-builder --mac dmg zip --x64 -c.electronVersion=26.6.10 -c.mac.minimumSystemVersion=10.14.6",
+    "release:key": "node ../../scripts/release-key.mjs",
+    "release:sign-manifest": "node ../../scripts/sign-release-manifest.mjs",
+    "release:verify": "node ../../scripts/verify-release.mjs --keys ../../tests/fixtures/development-signing-keys.json",
+    "release:approve": "node ../../scripts/verify-release.mjs --release"
   },
   "devDependencies": {
     "electron": "44.2.0",
@@ -25,6 +29,9 @@
     },
     "files": [
       "main.cjs",
+      "release-manifest.cjs",
+      "code-signature.cjs",
+      "release-signing-keys.json",
       "package.json"
     ],
     "mac": {
@@ -32,11 +39,22 @@
       "icon": "build/icon.svg",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "minimumSystemVersion": "13.0"
+      "minimumSystemVersion": "13.0",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": false
     },
     "win": {
       "icon": "build/icon.svg",
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ],
+      "signtoolOptions": {
+        "signingHashAlgorithms": [
+          "sha256"
+        ],
+        "rfc3161TimeStampServer": "http://timestamp.digicert.com"
+      }
     },
     "nsis": {
       "oneClick": false,

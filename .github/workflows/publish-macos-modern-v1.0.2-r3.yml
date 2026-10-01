@@ -1,0 +1,119 @@
+name: publish-macos-modern-v1.0.2-r3
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: macos-modern-v1.0.2-r3
+  cancel-in-progress: true
+
+env:
+  APP_VERSION: '1.0.2'
+  RELEASE_TAG: 'v1.0.2-r3'
+  EXPECTED_HEAD: ${{ github.sha }}
+
+jobs:
+  publish:
+    name: macOS 26 ARM64 build + immutable hotfix release
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+
+      - name: Verify exact public packaging source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(uname -m)" = "arm64"
+          case "$(sw_vers -productVersion)" in 26.*) ;; *) exit 1 ;; esac
+          node --check release-tools.cjs
+          node release-tools.cjs source
+
+      - name: Install packaging dependencies
+        working-directory: desktop
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm install --no-audit --no-fund
+
+      - name: Build macOS modern Universal package
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run dist:mac
+
+      - name: Verify actual macOS metadata
+        working-directory: desktop
+        run: node verify-package.cjs macos modern
+
+      - name: Normalize public filename and assemble release evidence
+        run: |
+          set -euo pipefail
+          node release-tools.cjs normalize macos modern
+          cp SOURCE-v1.0.2.json desktop/release/SOURCE-v1.0.2.json
+          cd desktop/release
+          shasum -a 256             Incheon-Academy-OS-macOS-13-plus-v1.0.2-universal.dmg             macos-modern-verification.json             SOURCE-v1.0.2.json > SHA256SUMS.txt
+          shasum -a 256 -c SHA256SUMS.txt
+
+      - name: Stage immutable macOS hotfix release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Hotfix release already exists; refusing to overwrite it."
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" desktop/release/*             --draft             --target "$EXPECTED_HEAD"             --title "실용음악위원회 v1.0.2 · macOS hotfix r3"             --notes-file RELEASE-v1.0.2-r3.md
+
+      - name: Read back staged bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir staged-readback
+          gh release download "$RELEASE_TAG" --dir staged-readback
+          test "$(find staged-readback -maxdepth 1 -type f | wc -l | tr -d ' ')" = "4"
+          for file in desktop/release/*; do
+            cmp "$file" "staged-readback/$(basename "$file")"
+          done
+          (cd staged-readback && shasum -a 256 -c SHA256SUMS.txt)
+
+      - name: Publish hotfix release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$RELEASE_TAG" --draft=false
+
+      - name: Anonymous public readback
+        env:
+          GH_TOKEN: ''
+        run: |
+          set -euo pipefail
+          mkdir public-readback
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}"
+          for file in desktop/release/*; do
+            name="$(basename "$file")"
+            curl --fail --location --retry 5 --retry-all-errors --max-time 240 "$base/$name" -o "public-readback/$name"
+            cmp "$file" "public-readback/$name"
+          done
+          (cd public-readback && shasum -a 256 -c SHA256SUMS.txt)
+
+      - name: Record published DMG digest
+        run: |
+          {
+            echo "## macOS modern v1.0.2 r3"
+            shasum -a 256 desktop/release/Incheon-Academy-OS-macOS-13-plus-v1.0.2-universal.dmg
+            stat -f "sizeBytes=%z" desktop/release/Incheon-Academy-OS-macOS-13-plus-v1.0.2-universal.dmg
+            echo "productSourceSha=4e60654968ca83402434486ebc0d52753e55798a"
+            echo "publicPackagingSha=$EXPECTED_HEAD"
+          } >> "$GITHUB_STEP_SUMMARY"

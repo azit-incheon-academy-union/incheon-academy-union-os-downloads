@@ -6,15 +6,19 @@ const assert=require('node:assert/strict');
 const {createHash}=require('node:crypto');
 const {execFileSync}=require('node:child_process');
 const VERSION='1.0.2';
-const UPSTREAM='66ea1100f1f39d1dfebbe10798213062a953d77e';
+const UPSTREAM='4e60654968ca83402434486ebc0d52753e55798a';
 const APP='실용음악위원회';
 const ORG='인천학원연합회 음악분과 실용음악위원회';
 const BASE='https://incheon-academy-union-os-web.vercel.app';
 const blobs={
-  'desktop/main.cjs':'2be06e6228bf7d31c7607bee17698a31dbcd75ee',
-  'desktop/package.json':'28837cae40c21b3adff3f1d8646048e053084483',
-  'desktop/verify-package.cjs':'4e00d9cb4ebf574a639c0e85942b04d5bfb06398',
-  'desktop/build/icon.svg':'eb65dbb4dffe031ace689e86c905cc12274fd30f'
+  'desktop/main.cjs':'08faabf65c666d7d95de10001e36ffeca94739c4',
+  'desktop/package.json':'3092a2a7fcca662c91d1a060e4862892df1c5845',
+  'desktop/verify-package.cjs':'8855bf38869cc64b22cfa88adb4b23d92a649fa0',
+  'desktop/release-manifest.cjs':'8cdd2595f7f58c004a0dea605fd4032145e93714',
+  'desktop/code-signature.cjs':'3b16a55b099eb6f9a6639c046b352535c370b073',
+  'desktop/release-signing-keys.json':'336dee6bb2868af6ae27ee04195f82c8b2c13ddf',
+  'desktop/build/icon.svg':'eb65dbb4dffe031ace689e86c905cc12274fd30f',
+  'desktop/build/entitlements.mac.plist':'e1587c7858625377ddcb0039fe55f038e587275f'
 };
 const names={
   'windows-modern':`Incheon-Academy-OS-Windows-10-11-v${VERSION}-x64.exe`,

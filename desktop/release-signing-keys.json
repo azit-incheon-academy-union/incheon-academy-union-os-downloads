@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "comment": "Distribution trust list: the public keys the packaged desktop shell will believe. Production keys ONLY. It is deliberately empty until a release signing key is generated and held outside this repository, which keeps signed-release readiness BLOCKED rather than pretending a reproducible development key is release trust. Generate one with 'node scripts/release-key.mjs --generate --key-id <id>', store the seed in a secret manager, and add its public half here with environment 'production'. Private keys never belong in this file.",
+  "releaseReadiness": "BLOCKED_NO_PRODUCTION_KEY",
+  "keys": []
+}

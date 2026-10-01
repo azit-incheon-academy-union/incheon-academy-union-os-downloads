@@ -23,17 +23,22 @@ if(platform==='windows'){
   assert.equal(value.productVersion,`${pkg.version}.0`);
   metadata.push({executable,...value});
 }else if(platform==='macos'){
+  const modernInternalName='IncheonAcademyOS';
+  const expectedInternalName=channel==='modern'?modernInternalName:APP;
   const directories=fs.readdirSync(root,{withFileTypes:true}).filter(entry=>entry.isDirectory()&&entry.name.startsWith('mac')).map(entry=>path.join(root,entry.name));
   for(const directory of directories){
     for(const name of fs.readdirSync(directory).filter(name=>name.endsWith('.app'))){
-      // macOS emits decomposed Korean file names; compare canonical equivalents.
-      assert.equal(name.normalize('NFC'),`${APP}.app`);
+      // Mojave retains the Korean bundle name; modern macOS uses ASCII internally
+      // so Electron helper discovery is stable across NFC/NFD normalization.
+      assert.equal(name.normalize('NFC'),`${expectedInternalName}.app`);
       const plist=path.join(directory,name,'Contents','Info.plist');
       const value=JSON.parse(execFileSync('plutil',['-convert','json','-o','-',plist],{encoding:'utf8'}));
       assert.equal((value.CFBundleDisplayName??value.CFBundleName).normalize('NFC'),APP);
-      assert.equal(value.CFBundleName.normalize('NFC'),APP);assert.equal(value.CFBundleIdentifier,ID);
+      assert.equal(value.CFBundleName.normalize('NFC'),expectedInternalName);
+      assert.equal(value.CFBundleExecutable.normalize('NFC'),expectedInternalName);
+      assert.equal(value.CFBundleIdentifier,ID);
       assert.equal(value.CFBundleShortVersionString,pkg.version);
-      metadata.push({app:name,displayName:value.CFBundleDisplayName??value.CFBundleName,appId:value.CFBundleIdentifier,version:value.CFBundleShortVersionString});
+      metadata.push({app:name,displayName:value.CFBundleDisplayName??value.CFBundleName,internalName:value.CFBundleName,executable:value.CFBundleExecutable,appId:value.CFBundleIdentifier,version:value.CFBundleShortVersionString});
     }
   }
   assert.ok(metadata.length,'a packaged macOS app must be inspected');
